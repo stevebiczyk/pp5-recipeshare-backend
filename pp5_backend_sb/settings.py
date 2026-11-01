@@ -35,41 +35,61 @@ STORAGES = {
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [(
-        'rest_framework.authentication.SessionAuthentication'
-        if 'DEV' in os.environ
-        else 'dj_rest_auth.jwt_auth.JWTCookieAuthentication'
-    )],
-    'DEFAULT_PAGINATION_CLASS':
-        'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
-    'DATETIME_FORMAT': '%d %b %Y',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "dj_rest_auth.jwt_auth.JWTCookieAuthentication",
+    ],
+    "DEFAULT_PAGINATION_CLASS": (
+        "rest_framework.pagination.PageNumberPagination"
+    ),
+    "PAGE_SIZE": 10,
+    "DATETIME_FORMAT": "%d %b %Y",
 }
-if 'DEV' not in os.environ:
-    REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] = [
-        'rest_framework.renderers.JSONRenderer',
+
+if "DEV" not in os.environ:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
+        "rest_framework.renderers.JSONRenderer",
     ]
 
-REST_USE_JWT = True
-JWT_AUTH_SECURE = True
-JWT_AUTH_COOKIE = 'my-app-auth'
-JWT_AUTH_REFRESH_COOKIE = 'my-refresh-token'
-JWT_AUTH_SAMESITE = 'None'
+IS_DEVELOPMENT = "DEV" in os.environ
 
-REST_AUTH_SERIALIZERS = {
-    'USER_DETAILS_SERIALIZER': 'pp5_backend_sb.serializers.CurrentUserSerializer'
+REST_AUTH = {
+    "USE_JWT": True,
+    "SESSION_LOGIN": False,
+    "TOKEN_MODEL": None,
+    "JWT_AUTH_COOKIE": "my-app-auth",
+    "JWT_AUTH_REFRESH_COOKIE": "my-refresh-token",
+    "JWT_AUTH_HTTPONLY": True,
+    "JWT_AUTH_SECURE": not IS_DEVELOPMENT,
+    "JWT_AUTH_SAMESITE": "Lax" if IS_DEVELOPMENT else "None",
+    "JWT_AUTH_COOKIE_USE_CSRF": True,
+    "USER_DETAILS_SERIALIZER": (
+        "pp5_backend_sb.serializers.CurrentUserSerializer"
+    ),
 }
+
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-pp5-dev-fallback-key-replace-in-production')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = 'DEV' in os.environ or os.getenv('DEBUG', 'False').lower() in ('true', '1')
+IS_DEVELOPMENT = "DEV" in os.environ
+
+SECRET_KEY = os.environ.get("SECRET_KEY")
+
+if not SECRET_KEY:
+    if IS_DEVELOPMENT:
+        SECRET_KEY = "development-only-recipeshare-secret"
+    else:
+        raise RuntimeError(
+            "SECRET_KEY must be configured in production"
+        )
+
+DEBUG = IS_DEVELOPMENT
+
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -123,6 +143,18 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
 ]
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+]
+
+if os.environ.get("CLIENT_ORIGIN"):
+    CSRF_TRUSTED_ORIGINS.append(
+        os.environ["CLIENT_ORIGIN"]
+    )
+
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
