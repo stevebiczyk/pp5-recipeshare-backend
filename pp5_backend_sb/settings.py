@@ -21,7 +21,6 @@ CLOUDINARY_STORAGE = {
     'CLOUDINARY_URL': os.environ.get('CLOUDINARY_URL')
 }
 MEDIA_URL = '/media/'
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 STORAGES = {
     "default": {
@@ -36,6 +35,29 @@ STORAGES = {
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+
+IS_DEVELOPMENT = os.environ.get("DEV", "").lower() in {"1", "true", "yes"}
+
+if IS_DEVELOPMENT and not (
+    os.environ.get("CLOUDINARY_URL") or all(
+        os.environ.get(key) for key in (
+            "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"
+        )
+    )
+):
+    STORAGES["default"] = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    }
+MEDIA_ROOT = BASE_DIR / "media"
+
+COOKIE_SAMESITE = os.environ.get("JWT_COOKIE_SAMESITE", "Lax")
+if COOKIE_SAMESITE not in {"Lax", "Strict", "None"}:
+    raise RuntimeError("JWT_COOKIE_SAMESITE must be Lax, Strict or None")
+if IS_DEVELOPMENT and COOKIE_SAMESITE == "None":
+    raise RuntimeError("SameSite=None requires HTTPS; use Lax for local development")
+CSRF_COOKIE_SAMESITE = COOKIE_SAMESITE
+CSRF_COOKIE_SECURE = not IS_DEVELOPMENT
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "dj_rest_auth.jwt_auth.JWTCookieAuthentication",
@@ -47,12 +69,10 @@ REST_FRAMEWORK = {
     "DATETIME_FORMAT": "%d %b %Y",
 }
 
-if "DEV" not in os.environ:
+if not IS_DEVELOPMENT:
     REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
         "rest_framework.renderers.JSONRenderer",
     ]
-
-IS_DEVELOPMENT = "DEV" in os.environ
 
 REST_AUTH = {
     "USE_JWT": True,
@@ -62,7 +82,7 @@ REST_AUTH = {
     "JWT_AUTH_REFRESH_COOKIE": "my-refresh-token",
     "JWT_AUTH_HTTPONLY": True,
     "JWT_AUTH_SECURE": not IS_DEVELOPMENT,
-    "JWT_AUTH_SAMESITE": "Lax" if IS_DEVELOPMENT else "None",
+    "JWT_AUTH_SAMESITE": COOKIE_SAMESITE,
     "JWT_AUTH_COOKIE_USE_CSRF": True,
     "USER_DETAILS_SERIALIZER": (
         "pp5_backend_sb.serializers.CurrentUserSerializer"
@@ -70,13 +90,17 @@ REST_AUTH = {
 }
 
 
+JWT_AUTH_COOKIE = REST_AUTH["JWT_AUTH_COOKIE"]
+JWT_AUTH_REFRESH_COOKIE = REST_AUTH["JWT_AUTH_REFRESH_COOKIE"]
+JWT_AUTH_SAMESITE = REST_AUTH["JWT_AUTH_SAMESITE"]
+JWT_AUTH_SECURE = REST_AUTH["JWT_AUTH_SECURE"]
+
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-
-IS_DEVELOPMENT = "DEV" in os.environ
 
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
@@ -148,6 +172,8 @@ MIDDLEWARE = [
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
 ]
 
 if os.environ.get("CLIENT_ORIGIN"):
@@ -198,7 +224,7 @@ WSGI_APPLICATION = 'pp5_backend_sb.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-if 'DEV' in os.environ or not os.environ.get("DATABASE_URL"):
+if IS_DEVELOPMENT:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -206,13 +232,14 @@ if 'DEV' in os.environ or not os.environ.get("DATABASE_URL"):
         }
     }
 else:
+    if not os.environ.get("DATABASE_URL"):
+        raise RuntimeError("DATABASE_URL must be configured in production")
     DATABASES = {
         'default': dj_database_url.parse(
             os.environ.get("DATABASE_URL"),
             conn_max_age=600,
         )
     }
-    # print('connected')
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators

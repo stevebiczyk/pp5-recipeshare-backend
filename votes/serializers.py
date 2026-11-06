@@ -1,4 +1,3 @@
-from django.db import IntegrityError
 from rest_framework import serializers
 from votes.models import Vote
 
@@ -8,32 +7,23 @@ class VoteSerializer(serializers.ModelSerializer):
     Serializer for the Vote model
     """
     owner = serializers.ReadOnlyField(source='owner.username')
+    vote_type = serializers.ChoiceField(choices=Vote.CHOICES, default='upvote')
 
     class Meta:
         model = Vote
         fields = ['id', 'recipe', 'created_at', 'owner', 'vote_type']
 
+    def validate(self, attrs):
+        recipe = attrs.get('recipe', self.instance.recipe if self.instance else None)
+        if self.instance and recipe != self.instance.recipe:
+            raise serializers.ValidationError({'recipe': 'A vote cannot be moved to another recipe.'})
+        if recipe and recipe.owner_id == self.context['request'].user.pk:
+            raise serializers.ValidationError({'recipe': 'You cannot vote on your own recipe.'})
+        return attrs
+
     def create(self, validated_data):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            owner = request.user
-            recipe = validated_data.get('recipe')
-            vote_type = validated_data.get('vote_type') or 'upvote'
-
-            vote, created = Vote.objects.get_or_create(
-                owner=owner,
-                recipe=recipe,
-                defaults={'vote_type': vote_type}
-            )
-            if not created:
-                if vote.vote_type != vote_type:
-                    vote.vote_type = vote_type
-                    vote.save()
-                    return vote
-                raise serializers.ValidationError({'detail': 'possible duplicate'})
-            return vote
-
-        try:
-            return super().create(validated_data)
-        except IntegrityError:
-            raise serializers.ValidationError({'detail': 'possible duplicate'})
+        vote, _ = Vote.objects.update_or_create(
+            owner=validated_data['owner'], recipe=validated_data['recipe'],
+            defaults={'vote_type': validated_data.get('vote_type', 'upvote')},
+        )
+        return vote

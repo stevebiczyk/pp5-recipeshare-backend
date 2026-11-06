@@ -16,6 +16,8 @@ class RecipeSerializer(serializers.ModelSerializer):
     vote_id = serializers.SerializerMethodField()
     vote_type = serializers.SerializerMethodField()
     votes_count = serializers.ReadOnlyField()
+    upvotes_count = serializers.ReadOnlyField()
+    downvotes_count = serializers.ReadOnlyField()
     comments_count = serializers.ReadOnlyField()
 
     def validate_image(self, value):
@@ -38,6 +40,8 @@ class RecipeSerializer(serializers.ModelSerializer):
         return request.user == obj.owner
 
     def get_vote_id(self, obj):
+        if hasattr(obj, 'current_vote_id'):
+            return obj.current_vote_id
         user = self.context['request'].user
         if user.is_authenticated:
             vote = Vote.objects.filter(
@@ -47,6 +51,8 @@ class RecipeSerializer(serializers.ModelSerializer):
         return None
 
     def get_vote_type(self, obj):
+        if hasattr(obj, 'current_vote_type'):
+            return obj.current_vote_type
         user = self.context['request'].user
         if user.is_authenticated:
             vote = Vote.objects.filter(
@@ -62,5 +68,6 @@ class RecipeSerializer(serializers.ModelSerializer):
             'profile_avatar', 'profile_image', 'created_at', 'updated_at',
             'title', 'ingredients', 'instructions', 'image',
             'cooking_time', 'difficulty_level', 'category',
-            'vote_id', 'vote_type', 'votes_count', 'comments_count',
+            'vote_id', 'vote_type', 'votes_count', 'upvotes_count',
+            'downvotes_count', 'comments_count',
         ]

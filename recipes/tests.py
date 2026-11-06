@@ -13,11 +13,10 @@ class RecipeListViewTests(APITestCase):
         Recipe.objects.create(owner=adam, title='a title')
         response = self.client.get('/recipes/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        print(response.data)
-        print(len(response.data))
+        self.assertEqual(response.data['count'], 1)
 
     def test_logged_in_user_can_create_recipes(self):
-        self.client.login(username='adam', password='pass')
+        self.client.force_authenticate(User.objects.get(username='adam'))
         response = self.client.post('/recipes/', {'title': 'a title', 'ingredients': 'Some ingredients', 'instructions': 'Some instructions'})
         count = Recipe.objects.count()
         self.assertEqual(count, 1)
@@ -25,7 +24,7 @@ class RecipeListViewTests(APITestCase):
 
     def test_user_not_logged_in_cant_create_recipe(self):
         response = self.client.post('/recipes/', {'title': 'a title', 'ingredients': 'Some ingredients', 'instructions': 'Some instructions'})
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class RecipeDetailViewTests(APITestCase):
@@ -49,13 +48,13 @@ class RecipeDetailViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_user_can_update_own_recipe(self):
-        self.client.login(username='adam', password='pass')
+        self.client.force_authenticate(User.objects.get(username='adam'))
         response = self.client.put('/recipes/1/', {'title': 'a better title', 'ingredients': 'Some ingredients', 'instructions': 'Some instructions'})
         recipe = Recipe.objects.filter(pk=1).first()
         self.assertEqual(recipe.title, 'a better title')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_user_cant_update_another_users_recipe(self):
-        self.client.login(username='adam', password='pass')
+        self.client.force_authenticate(User.objects.get(username='adam'))
         response = self.client.put('/recipes/2/', {'title': 'a new title'})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

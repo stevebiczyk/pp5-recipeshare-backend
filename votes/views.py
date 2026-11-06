@@ -30,16 +30,10 @@ class VoteDetail(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def downvote_view(request):
-    recipe_id = request.data.get('recipe')
-    if not recipe_id:
-        return Response({'detail': 'recipe id required'}, status=status.HTTP_400_BAD_REQUEST)
-    vote, created = Vote.objects.get_or_create(
-        owner=request.user,
-        recipe_id=recipe_id,
-        defaults={'vote_type': 'downvote'}
+    serializer = VoteSerializer(
+        data={'recipe': request.data.get('recipe'), 'vote_type': 'downvote'},
+        context={'request': request},
     )
-    if not created:
-        vote.vote_type = 'downvote'
-        vote.save()
-    serializer = VoteSerializer(vote, context={'request': request})
-    return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+    serializer.is_valid(raise_exception=True)
+    serializer.save(owner=request.user)
+    return Response(serializer.data, status=status.HTTP_200_OK)

@@ -1,9 +1,8 @@
-from django.db.models import Count
 from rest_framework import generics, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from pp5_backend_sb.permissions import IsOwnerOrReadOnly
-from .models import Recipe
 from .serializers import RecipeSerializer
+from .querysets import recipe_queryset
 
 
 class RecipeList(generics.ListCreateAPIView):
@@ -13,10 +12,6 @@ class RecipeList(generics.ListCreateAPIView):
     """
     serializer_class = RecipeSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    queryset = Recipe.objects.annotate(
-        votes_count=Count('votes', distinct=True),
-        comments_count=Count('comment', distinct=True)
-    ).order_by('-created_at')
     filter_backends = [
         filters.OrderingFilter,
         filters.SearchFilter,
@@ -39,13 +34,16 @@ class RecipeList(generics.ListCreateAPIView):
     ordering_fields = [
         'votes_count',
         'comments_count',
-        'votes__created_at',
+        'current_vote_created_at',
         'cooking_time',
         'created_at',
     ]
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def get_queryset(self):
+        return recipe_queryset(self.request.user)
 
 
 class RecipeDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -54,7 +52,5 @@ class RecipeDetail(generics.RetrieveUpdateDestroyAPIView):
     """
     serializer_class = RecipeSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    queryset = Recipe.objects.annotate(
-        votes_count=Count('votes', distinct=True),
-        comments_count=Count('comment', distinct=True)
-    ).order_by('-created_at')
+    def get_queryset(self):
+        return recipe_queryset(self.request.user)
