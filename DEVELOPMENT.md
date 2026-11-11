@@ -23,7 +23,7 @@ Run tests with:
 
 `manage.py test` selects `pp5_backend_sb.test_settings` by default: in-memory database/media, fast test password hashing, and no external credentials. To select it explicitly, use `--settings=pp5_backend_sb.test_settings`. These overrides are not used by the application server.
 
-Production requires `SECRET_KEY` and `DATABASE_URL`, with `DEV` unset or false. Configure `CLOUDINARY_URL`, the exact `CLIENT_ORIGIN` (scheme and hostname, no trailing slash), and `ALLOWED_HOST` for deployment. For frontend and API on different sites over HTTPS, set `JWT_COOKIE_SAMESITE=None`; JWT and CSRF cookies will be Secure. The default is `Lax`. Browser third-party-cookie restrictions can still require a same-site deployment. CORS and CSRF origins must match the actual frontend.
+Production requires `SECRET_KEY` and `DATABASE_URL`, with `DEV` unset or false. Configure `CLOUDINARY_URL`, the exact `CLIENT_ORIGIN` (scheme and hostname, no trailing slash), and `ALLOWED_HOST` for deployment. Production redirects HTTP to HTTPS, enables one-year HSTS for the API host only, and marks session, JWT, and CSRF cookies Secure; the reverse proxy must set `X-Forwarded-Proto` reliably. For frontend and API on different sites over HTTPS, set `JWT_COOKIE_SAMESITE=None`. The default is `Lax`. Browser third-party-cookie restrictions can still require a same-site deployment. CORS and CSRF origins must match the actual frontend.
 
 The frontend fetches a masked token from the uncached `/csrf/` endpoint before writes and sends it as `X-CSRFToken`. It does not need to read a cookie on the backend hostname. Login and registration clear its cached token before subsequent writes.
 

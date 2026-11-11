@@ -1,5 +1,7 @@
 from django.contrib.auth.models import User
+from time import time
 from rest_framework.test import APIClient, APITestCase
+from rest_framework_simplejwt.tokens import AccessToken
 
 from comments.models import Comment
 from followers.models import Follower
@@ -113,6 +115,25 @@ class CsrfIntegrationTests(APITestCase):
         token = self.client.get('/csrf/').json()['csrfToken']
         response = self.client.post('/recipes/', self.payload, HTTP_X_CSRFTOKEN=token, HTTP_ORIGIN='https://untrusted.example')
         self.assertEqual(response.status_code, 403)
+
+    def test_comment_after_access_expiry_refreshes_with_cookie_and_csrf(self):
+        author = User.objects.create_user('comment_author')
+        recipe = Recipe.objects.create(owner=author, title='Comment test', ingredients='x', instructions='y')
+        token = self.client.get('/csrf/').json()['csrfToken']
+        expired = AccessToken.for_user(User.objects.get(username='browser'))
+        expired['exp'] = int(time()) - 60
+        self.client.cookies['my-app-auth'] = str(expired)
+        payload = {'recipe': recipe.pk, 'content': 'QA comment B'}
+        headers = {'HTTP_X_CSRFTOKEN': token, 'HTTP_ORIGIN': 'http://localhost:3000'}
+        response = self.client.post('/comments/', payload, **headers)
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(Comment.objects.exists())
+        response = self.client.post('/dj-rest-auth/token/refresh/', **headers)
+        self.assertEqual(response.status_code, 200, response.data)
+        response = self.client.post('/comments/', payload, **headers)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(Comment.objects.count(), 1)
+        self.assertEqual(self.client.get('/dj-rest-auth/user/').status_code, 200)
 
     def test_registration_then_login_and_logout_with_csrf(self):
         self.client.cookies.clear()

@@ -12,7 +12,7 @@ class VoteList(generics.ListCreateAPIView):
     """
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     serializer_class = VoteSerializer
-    queryset = Vote.objects.all()
+    queryset = Vote.objects.select_related('owner', 'recipe')
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -24,7 +24,7 @@ class VoteDetail(generics.RetrieveUpdateDestroyAPIView):
     """
     permission_classes = [IsOwnerOrReadOnly]
     serializer_class = VoteSerializer
-    queryset = Vote.objects.all()
+    queryset = Vote.objects.select_related('owner', 'recipe')
 
 
 @api_view(['POST'])
