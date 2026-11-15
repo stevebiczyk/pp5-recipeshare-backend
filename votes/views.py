@@ -6,17 +6,33 @@ from votes.models import Vote
 from votes.serializers import VoteSerializer
 
 
+
 class VoteList(generics.ListCreateAPIView):
-    """
-    List votes or create a vote if logged in.
-    """
+    """List votes or create/update a user's vote."""
+
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     serializer_class = VoteSerializer
-    queryset = Vote.objects.select_related('owner', 'recipe')
+    queryset = Vote.objects.select_related("owner", "recipe")
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        self.perform_create(serializer)
+
+        response_status = (
+            status.HTTP_201_CREATED
+            if serializer.was_created
+            else status.HTTP_200_OK
+        )
+
+        return Response(
+            serializer.data,
+            status=response_status,
+        )
 
 class VoteDetail(generics.RetrieveUpdateDestroyAPIView):
     """

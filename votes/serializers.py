@@ -21,9 +21,18 @@ class VoteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'recipe': 'You cannot vote on your own recipe.'})
         return attrs
 
+
     def create(self, validated_data):
-        vote, _ = Vote.objects.update_or_create(
-            owner=validated_data['owner'], recipe=validated_data['recipe'],
-            defaults={'vote_type': validated_data.get('vote_type', 'upvote')},
+        vote, created = Vote.objects.update_or_create(
+            owner=validated_data["owner"],
+            recipe=validated_data["recipe"],
+            defaults={
+                "vote_type": validated_data.get(
+                    "vote_type", "upvote"
+                )
+            },
         )
+
+        self.was_created = created
+
         return vote

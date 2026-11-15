@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -111,6 +113,45 @@ class VoteAPITests(APITestCase):
             Vote.objects.get().vote_type,
             "downvote",
         )
+        
+    
+def test_invalid_vote_type_is_rejected(self):
+    self.authenticate()
+
+    response = self.client.post(
+        self.votes_url,
+        {
+            "recipe": self.recipe.pk,
+            "vote_type": "neutral",
+        },
+    )
+
+    self.assertEqual(
+        response.status_code,
+        status.HTTP_400_BAD_REQUEST,
+    )
+    self.assertEqual(Vote.objects.count(), 0)
+
+
+def test_legacy_downvote_endpoint_updates_vote(self):
+    self.authenticate()
+    vote = self.create_vote(vote_type="upvote")
+
+    response = self.client.post(
+        "/votes/downvote/",
+        {"recipe": self.recipe.pk},
+    )
+
+    vote.refresh_from_db()
+
+    self.assertEqual(
+        response.status_code,
+        status.HTTP_200_OK,
+    )
+    self.assertEqual(vote.vote_type, "downvote")
+    self.assertEqual(Vote.objects.count(), 1)
+    self.assertEqual(response.data["id"], vote.pk)
+
 
     def test_vote_defaults_to_upvote(self):
         self.authenticate()
@@ -166,7 +207,7 @@ class VoteAPITests(APITestCase):
         )
 
         self.assertEqual(first_response.status_code, 201)
-        self.assertEqual(second_response.status_code, 201)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK,)
         self.assertEqual(Vote.objects.count(), 1)
         self.assertEqual(
             first_response.data["id"],
@@ -187,7 +228,7 @@ class VoteAPITests(APITestCase):
 
         vote.refresh_from_db()
 
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, status.HTTP_200_OK,)
         self.assertEqual(Vote.objects.count(), 1)
         self.assertEqual(vote.vote_type, "downvote")
         self.assertEqual(response.data["id"], vote.pk)
@@ -279,3 +320,62 @@ class VoteAPITests(APITestCase):
         self.assertEqual(response.data["upvotes_count"], 2)
         self.assertEqual(response.data["downvotes_count"], 1)
         self.assertEqual(response.data["votes_count"], 1)
+
+
+class VoteConstraintTests(TestCase):
+    """Verify vote integrity at the database level."""
+
+    def setUp(self):
+        self.author = User.objects.create_user(
+            username="constraint_author",
+            password="TestPassword123!",
+        )
+        self.voter = User.objects.create_user(
+            username="constraint_voter",
+            password="TestPassword123!",
+        )
+        self.recipe = Recipe.objects.create(
+            owner=self.author,
+            title="Constraint Test Recipe",
+            ingredients="Test ingredients",
+            instructions="Test instructions",
+        )
+
+    def test_duplicate_vote_is_rejected(self):
+        Vote.objects.create(
+            owner=self.voter,
+            recipe=self.recipe,
+            vote_type="upvote",
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Vote.objects.create(
+                    owner=self.voter,
+                    recipe=self.recipe,
+                    vote_type="downvote",
+                )
+
+        self.assertEqual(Vote.objects.count(), 1)
+
+    def test_null_vote_type_is_rejected(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Vote.objects.create(
+                    owner=self.voter,
+                    recipe=self.recipe,
+                    vote_type=None,
+                )
+
+        self.assertEqual(Vote.objects.count(), 0)
+
+    def test_invalid_vote_type_is_rejected(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Vote.objects.create(
+                    owner=self.voter,
+                    recipe=self.recipe,
+                    vote_type="invalid",
+                )
+
+        self.assertEqual(Vote.objects.count(), 0)

@@ -16,17 +16,55 @@ class ApiRegressionTests(APITestCase):
         self.reader = User.objects.create_user('reader', password='StrongPassword123!')
         self.recipe = Recipe.objects.create(owner=self.author, title='Recipe', ingredients='Salt', instructions='Mix')
         self.client.force_authenticate(self.reader)
-
+    
     def test_vote_switch_remove_and_net_score(self):
-        for vote_type, score in [('downvote', -1), ('upvote', 1), ('upvote', 1), ('downvote', -1)]:
-            response = self.client.post('/votes/', {'recipe': self.recipe.pk, 'vote_type': vote_type})
-            self.assertEqual(response.status_code, 201, response.data)
+        vote_sequence = [
+            ("downvote", -1, 201),
+            ("upvote", 1, 200),
+            ("upvote", 1, 200),
+            ("downvote", -1, 200),
+        ]
+
+        for vote_type, score, expected_status in vote_sequence:
+            response = self.client.post(
+                "/votes/",
+                {
+                    "recipe": self.recipe.pk,
+                    "vote_type": vote_type,
+                },
+            )
+
+            self.assertEqual(
+                response.status_code,
+                expected_status,
+                response.data,
+            )
+
+            # Only one vote should exist after each operation.
             self.assertEqual(Vote.objects.count(), 1)
-            data = self.client.get(f'/recipes/{self.recipe.pk}/').data
-            self.assertEqual(data['votes_count'], score)
-            self.assertEqual(data['vote_type'], vote_type)
-        self.client.delete(f'/votes/{data["vote_id"]}/')
-        self.assertEqual(self.client.get(f'/recipes/{self.recipe.pk}/').data['votes_count'], 0)
+
+            data = self.client.get(
+                f"/recipes/{self.recipe.pk}/"
+            ).data
+
+            self.assertEqual(data["votes_count"], score)
+            self.assertEqual(data["vote_type"], vote_type)
+
+        # Remove the vote and verify the final score.
+        response = self.client.delete(
+            f'/votes/{data["vote_id"]}/'
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Vote.objects.count(), 0)
+
+        data = self.client.get(
+            f"/recipes/{self.recipe.pk}/"
+        ).data
+
+        self.assertEqual(data["votes_count"], 0)
+        self.assertIsNone(data["vote_id"])
+
 
     def test_counts_are_not_multiplied_by_comments(self):
         Vote.objects.create(owner=self.reader, recipe=self.recipe, vote_type='downvote')
