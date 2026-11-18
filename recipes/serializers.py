@@ -13,6 +13,12 @@ class RecipeSerializer(serializers.ModelSerializer):
     profile_image = serializers.ReadOnlyField(
         source='owner.profile.avatar.url'
     )
+    
+    cooking_time = serializers.IntegerField(
+    min_value=1,
+    required=False,
+    allow_null=True,
+)
     vote_id = serializers.SerializerMethodField()
     vote_type = serializers.SerializerMethodField()
     votes_count = serializers.ReadOnlyField()

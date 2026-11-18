@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.validators import MinValueValidator
+from django.db.models import Q
 from django.contrib.auth.models import User
 
 
@@ -25,7 +27,7 @@ class Recipe(models.Model):
     title = models.CharField(max_length=255)
     ingredients = models.TextField()
     instructions = models.TextField()
-    cooking_time = models.IntegerField(null=True, blank=True)  # in minutes
+    cooking_time = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1)])  # in minutes
     image = models.ImageField(
         upload_to='images/', default='../girl_climbing_gxt5ti', blank=True
         )
@@ -38,6 +40,12 @@ class Recipe(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                check=Q(cooking_time__gte=1) | Q(cooking_time__isnull=True),
+                name='recipe_positive_cooking_time_or_null',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.id} {self.title}'

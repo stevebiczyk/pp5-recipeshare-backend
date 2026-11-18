@@ -113,45 +113,42 @@ class VoteAPITests(APITestCase):
             Vote.objects.get().vote_type,
             "downvote",
         )
-        
-    
-def test_invalid_vote_type_is_rejected(self):
-    self.authenticate()
 
-    response = self.client.post(
-        self.votes_url,
-        {
-            "recipe": self.recipe.pk,
-            "vote_type": "neutral",
-        },
-    )
+    def test_invalid_vote_type_is_rejected(self):
+        self.authenticate()
 
-    self.assertEqual(
-        response.status_code,
-        status.HTTP_400_BAD_REQUEST,
-    )
-    self.assertEqual(Vote.objects.count(), 0)
+        response = self.client.post(
+            self.votes_url,
+            {
+                "recipe": self.recipe.pk,
+                "vote_type": "neutral",
+            },
+        )
 
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(Vote.objects.count(), 0)
 
-def test_legacy_downvote_endpoint_updates_vote(self):
-    self.authenticate()
-    vote = self.create_vote(vote_type="upvote")
+    def test_legacy_downvote_endpoint_updates_vote(self):
+        self.authenticate()
+        vote = self.create_vote(vote_type="upvote")
 
-    response = self.client.post(
-        "/votes/downvote/",
-        {"recipe": self.recipe.pk},
-    )
+        response = self.client.post(
+            "/votes/downvote/",
+            {"recipe": self.recipe.pk},
+        )
 
-    vote.refresh_from_db()
+        vote.refresh_from_db()
 
-    self.assertEqual(
-        response.status_code,
-        status.HTTP_200_OK,
-    )
-    self.assertEqual(vote.vote_type, "downvote")
-    self.assertEqual(Vote.objects.count(), 1)
-    self.assertEqual(response.data["id"], vote.pk)
-
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(vote.vote_type, "downvote")
+        self.assertEqual(Vote.objects.count(), 1)
+        self.assertEqual(response.data["id"], vote.pk)
 
     def test_vote_defaults_to_upvote(self):
         self.authenticate()
@@ -207,7 +204,7 @@ def test_legacy_downvote_endpoint_updates_vote(self):
         )
 
         self.assertEqual(first_response.status_code, 201)
-        self.assertEqual(second_response.status_code, status.HTTP_200_OK,)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
         self.assertEqual(Vote.objects.count(), 1)
         self.assertEqual(
             first_response.data["id"],
@@ -228,7 +225,7 @@ def test_legacy_downvote_endpoint_updates_vote(self):
 
         vote.refresh_from_db()
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK,)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(Vote.objects.count(), 1)
         self.assertEqual(vote.vote_type, "downvote")
         self.assertEqual(response.data["id"], vote.pk)
