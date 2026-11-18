@@ -1,3 +1,6 @@
+from io import BytesIO
+from tempfile import TemporaryDirectory
+
 from django.contrib.auth.models import User
 from .models import Recipe
 from rest_framework import status
@@ -5,6 +8,10 @@ from rest_framework.test import APITestCase
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from PIL import Image
 
 
 class RecipeListViewTests(APITestCase):
@@ -234,3 +241,188 @@ class RecipeConstraintTests(TestCase):
                         )
 
         self.assertEqual(Recipe.objects.count(), 0)
+
+class RecipeImageTests(APITestCase):
+    """Verify optional images and image preservation."""
+
+    def setUp(self):
+        # Isolate uploaded test files from real recipe images.
+        self.temp_media = TemporaryDirectory()
+        self.addCleanup(self.temp_media.cleanup)
+
+        storage_settings = override_settings(
+            MEDIA_ROOT=self.temp_media.name,
+            STORAGES={
+                "default": {
+                    "BACKEND": (
+                        "django.core.files.storage."
+                        "FileSystemStorage"
+                    ),
+                },
+                "staticfiles": {
+                    "BACKEND": (
+                        "django.contrib.staticfiles.storage."
+                        "StaticFilesStorage"
+                    ),
+                },
+            },
+        )
+
+        storage_settings.enable()
+        self.addCleanup(storage_settings.disable)
+
+        self.user = User.objects.create_user(
+            username="image_test_user",
+            password="TestPassword123!",
+        )
+
+        self.client.force_authenticate(self.user)
+
+        self.recipe_data = {
+            "title": "Test Pasta",
+            "ingredients": "Pasta, tomatoes, garlic",
+            "instructions": "Cook and combine.",
+            "cooking_time": 30,
+        }
+
+    def make_image(self, name="recipe.png"):
+        """Generate a valid image entirely in memory."""
+        buffer = BytesIO()
+
+        image = Image.new(
+            "RGB",
+            (100, 100),
+            color="green",
+        )
+        image.save(buffer, format="PNG")
+
+        return SimpleUploadedFile(
+            name,
+            buffer.getvalue(),
+            content_type="image/png",
+        )
+
+    def test_recipe_can_be_created_without_image(self):
+        response = self.client.post(
+            "/recipes/",
+            self.recipe_data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+            response.data,
+        )
+        self.assertIsNone(response.data["image"])
+        self.assertFalse(Recipe.objects.get().image)
+
+    def test_valid_image_can_be_uploaded(self):
+        data = {
+            **self.recipe_data,
+            "image": self.make_image(),
+        }
+
+        response = self.client.post(
+            "/recipes/",
+            data,
+            format="multipart",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+            response.data,
+        )
+        recipe = Recipe.objects.get()
+
+        self.assertTrue(recipe.image)
+        self.assertTrue(
+            recipe.image.storage.exists(recipe.image.name)
+        )
+
+    def test_invalid_image_is_rejected(self):
+        invalid_image = SimpleUploadedFile(
+            "invalid.png",
+            b"This is not a valid image",
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            "/recipes/",
+            {
+                **self.recipe_data,
+                "image": invalid_image,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertIn("image", response.data)
+        self.assertEqual(Recipe.objects.count(), 0)
+
+    def test_edit_without_image_preserves_existing_image(self):
+        recipe = Recipe.objects.create(
+            owner=self.user,
+            **self.recipe_data,
+            image=self.make_image(),
+        )
+
+        original_image = recipe.image.name
+
+        response = self.client.put(
+            f"/recipes/{recipe.pk}/",
+            {
+                **self.recipe_data,
+                "title": "Updated Pasta",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            response.data,
+        )
+
+        recipe.refresh_from_db()
+
+        self.assertEqual(recipe.title, "Updated Pasta")
+        self.assertEqual(recipe.image.name, original_image)
+
+    def test_edit_can_replace_existing_image(self):
+        recipe = Recipe.objects.create(
+            owner=self.user,
+            **self.recipe_data,
+            image=self.make_image("original.png"),
+        )
+
+        original_image = recipe.image.name
+
+        response = self.client.put(
+            f"/recipes/{recipe.pk}/",
+            {
+                **self.recipe_data,
+                "image": self.make_image("replacement.png"),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            response.data,
+        )
+
+        recipe.refresh_from_db()
+
+        self.assertNotEqual(recipe.image.name, original_image)
+        self.assertTrue(
+            recipe.image.name.endswith("replacement.png")
+        )
+        self.assertTrue(
+            recipe.image.storage.exists(recipe.image.name)
+        )

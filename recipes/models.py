@@ -29,7 +29,7 @@ class Recipe(models.Model):
     instructions = models.TextField()
     cooking_time = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1)])  # in minutes
     image = models.ImageField(
-        upload_to='images/', default='../girl_climbing_gxt5ti', blank=True
+        upload_to='images/', blank=True
         )
     difficulty_level = models.CharField(
         choices=DIFFICULTY_LEVELS, max_length=20, null=True, blank=True
